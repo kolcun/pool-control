@@ -143,12 +143,12 @@ void loop() {
   }
 
   //heater button pushed
-  if(digitalRead(BUTTON_HEATER) == LOW && !heaterActive){
+  if(digitalRead(BUTTON_HEATER) == LOW){
     Serial.println("turn heater on");
     activateHeater();
-  }else if(digitalRead(BUTTON_HEATER) == LOW && heaterActive){
-    Serial.println("turn heater off");
-    deactivateHeater();
+//  }else if(digitalRead(BUTTON_HEATER) == LOW && heaterActive){
+//    Serial.println("turn heater off");
+//    deactivateHeater();
 //note - need to remove local control via insteon sense button at heater
 //if we use this, there is no way to maintain a consistnet state of the light on the arduino
     
