@@ -143,10 +143,12 @@ void loop() {
   }
 
   //heater button pushed
-  if(digitalRead(BUTTON_HEATER) == LOW){
-    Serial.println("heater button pushed");
+  if(digitalRead(BUTTON_HEATER) == LOW && !heaterActive){
+    Serial.println("turn heater on");
     activateHeater();
-
+  }else if(digitalRead(BUTTON_HEATER) == LOW && !heaterActive){
+    Serial.println("turn heater off");
+    deactivateHeater();
 //note - need to remove local control via insteon sense button at heater
 //if we use this, there is no way to maintain a consistnet state of the light on the arduino
     
@@ -173,10 +175,13 @@ void loop() {
 
 void activateHeater(){
   heaterActive = true;
+  activateSpeedLevel3();
   bitSet(leds,4);
   updateShiftRegister();  
   refreshLcd();
-  delay(1500);
+}
+
+void deactivateHeater(){
   heaterActive = false;
   bitClear(leds,4);
   updateShiftRegister();  
@@ -207,6 +212,7 @@ void activateSpeedLevel1(){
   digitalWrite(RELAYB, HIGH);
 //  pubSubClient.publish("poolcontrol","Button A pressed");
   currentSpeed = 1;
+  refreshLcd();
 }
 
 void activateSpeedLevel2()
