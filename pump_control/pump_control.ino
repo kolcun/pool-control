@@ -1,23 +1,31 @@
 #include <SPI.h>
 #include <Ethernet.h>
 #include <PubSubClient.h>
+#include <MatrixOrbitali2c.h>
 
-int RELAYA = 2;
-int RELAYB = 3;
+MatrixOrbitali2c lcd(0x2E);
 
-int LED_SPEED1 = 4;
-int LED_SPEED2 = 5;
-int LED_SPEED3 = 6;
-int LED_SPEED4 = 7;
-int LED_HEATER = 8;
-int LED_LIGHT = 9;
+int latchPin = 2;
+int clockPin = 4;
+int dataPin = 3;
+byte leds = 0;
+
+int RELAYA = 5;
+int RELAYB = 6;
+
+//int LED_SPEED1 = 4;
+//int LED_SPEED2 = 5;
+//int LED_SPEED3 = 6;
+//int LED_SPEED4 = 7;
+//int LED_HEATER = 8;
+//int LED_LIGHT = 9;
 
 int BUTTON_SPEED1 = A0;
 int BUTTON_SPEED2 = A1;
 int BUTTON_SPEED3 = A2;
 int BUTTON_SPEED4 = A3;
-int BUTTON_HEATER = A4;
-int BUTTON_LIGHT = A5;
+int BUTTON_HEATER = 7;//A4;
+int BUTTON_LIGHT = 8;//A5;
 
 int currentSpeed = 1;
 
@@ -36,12 +44,29 @@ EthernetClient ethClient;
 PubSubClient pubSubClient(ethClient);
 
 void setup() {
-  pinMode(LED_SPEED1, OUTPUT);
-  pinMode(LED_SPEED2, OUTPUT);
-  pinMode(LED_SPEED3, OUTPUT);
-  pinMode(LED_SPEED4, OUTPUT);
-  pinMode(LED_HEATER, OUTPUT);
-  pinMode(LED_LIGHT, OUTPUT);
+
+  Serial.begin(9600);
+  
+  lcd.begin(4,20);
+  lcd.setContrast(180);
+  lcd.backlightOn();
+  lcd.clear();
+  lcd.print("Booting... ");
+  
+  pinMode(latchPin, OUTPUT);
+  pinMode(dataPin, OUTPUT);  
+  pinMode(clockPin, OUTPUT);
+  //start with all LEDs off
+  leds = 0;
+  updateShiftRegister();
+    
+//  pinMode(LED_SPEED1, OUTPUT);
+//  pinMode(LED_SPEED2, OUTPUT);
+//  pinMode(LED_SPEED3, OUTPUT);
+//  pinMode(LED_SPEED4, OUTPUT);
+//  pinMode(LED_HEATER, OUTPUT);
+//  pinMode(LED_LIGHT, OUTPUT);
+
   pinMode(BUTTON_SPEED1, INPUT_PULLUP);
   pinMode(BUTTON_SPEED2, INPUT_PULLUP);
   pinMode(BUTTON_SPEED3, INPUT_PULLUP);
@@ -54,19 +79,15 @@ void setup() {
   digitalWrite(RELAYA, HIGH);
   digitalWrite(RELAYB, HIGH);
 
-  digitalWrite(LED_SPEED1, HIGH); 
-  digitalWrite(LED_SPEED2, LOW); 
-  digitalWrite(LED_SPEED3, LOW); 
-  digitalWrite(LED_SPEED4, LOW);
-  digitalWrite(LED_HEATER, LOW);
-  digitalWrite(LED_LIGHT, LOW);
+//  digitalWrite(LED_SPEED1, HIGH); 
+//  digitalWrite(LED_SPEED2, LOW); 
+//  digitalWrite(LED_SPEED3, LOW); 
+//  digitalWrite(LED_SPEED4, LOW);
+//  digitalWrite(LED_HEATER, LOW);
+//  digitalWrite(LED_LIGHT, LOW);
 
    // Open serial communications and wait for port to open:
-  Serial.begin(9600);
-  // this check is only needed on the Leonardo:
-  while (!Serial) {
-    ; // wait for serial port to connect. Needed for native USB port only
-  }
+
 
   pubSubClient.setServer(mqttServer, 1883);
   pubSubClient.setCallback(mqttCallback);
@@ -76,7 +97,8 @@ void setup() {
     Serial.println("Failed to configure Ethernet using DHCP");
     // no point in carrying on, so do nothing forevermore:
     for (;;){
-      blinkLED(LED_HEATER,1);
+      //TODO
+//      blinkLED(LED_HEATER,1);
     }
   }
   // print your local IP address:
@@ -84,6 +106,7 @@ void setup() {
 
   delay(1500);
   Serial.println("Ready");
+  lcd.print("Complete");
 }
 
 void loop() {
@@ -91,8 +114,8 @@ void loop() {
   // speeds
   // Speed 1 = Timer 1 = 0 RPM (OFF);
   // Speed 2 = Timer 2 = 1300 RPM (minimum for chlorine)
-  // Speed 3 = Timer 2 = 1750 RPM (minimum for Heater)
-  // Speed 4 = Timer 2 = 3240 RPM (full speed for vacuum, slide)
+  // Speed 3 = Timer 3 = 1750 RPM (minimum for Heater)
+  // Speed 4 = Timer 4 = 3240 RPM (full speed for vacuum, slide)
 
   //TODO
   //use the LEDS as boot status, for example, LED1 turns on when it has an IP, LED 2 turns on when MQTT is connected
@@ -111,16 +134,15 @@ void loop() {
   if(digitalRead(BUTTON_SPEED1) == LOW && currentSpeed != 1){
     activateSpeedLevel1();
     Serial.println("Speed 1");
-    digitalWrite(LED_LIGHT, HIGH);
   }
   
   if(digitalRead(BUTTON_SPEED2) == LOW && currentSpeed != 2){
     activateSpeedLevel2();
     Serial.println("Speed 2");
-    digitalWrite(LED_HEATER, HIGH);
-    delay(500);
-    digitalWrite(LED_HEATER, LOW);
-    digitalWrite(LED_LIGHT, LOW);
+//    digitalWrite(LED_HEATER, HIGH);
+//    delay(500);
+//    digitalWrite(LED_HEATER, LOW);
+//    digitalWrite(LED_LIGHT, LOW);
   }
 
   if(digitalRead(BUTTON_SPEED3) == LOW && currentSpeed != 3){
@@ -133,9 +155,16 @@ void loop() {
     Serial.println("Speed 4");
   }
 
+  //pool ight button pushed
+  if(digitalRead(BUTTON_LIGHT) == LOW){
+    Serial.println("heater button pushed");
+    activatePoolLight();
+  }
+
   //heater button pushed
   if(digitalRead(BUTTON_HEATER) == LOW){
     Serial.println("heater button pushed");
+    activateHeater();
 
 //note - need to remove local control via insteon sense button at heater
 //if we use this, there is no way to maintain a consistnet state of the light on the arduino
@@ -156,9 +185,9 @@ void loop() {
     // - tell arduino via bus - solid light
     
     //activateSpeedLevel4();
-    digitalWrite(LED_HEATER, HIGH);
-    delay(500);
-    digitalWrite(LED_HEATER, LOW);
+//    digitalWrite(LED_HEATER, HIGH);
+//    delay(500);
+//    digitalWrite(LED_HEATER, LOW);
     //activateSpeedLevel1();
   }
 
@@ -166,12 +195,37 @@ void loop() {
                 
 }
 
+void activateHeater(){
+  Serial.println("heater button");
+  bitSet(leds,4);
+  updateShiftRegister();  
+  delay(1500);
+  bitClear(leds,4);
+  updateShiftRegister();  
+}
+
+void activatePoolLight(){
+  Serial.println("pool light button");
+  bitSet(leds,5);
+  updateShiftRegister();  
+  delay(1500);
+  bitClear(leds,5);
+  updateShiftRegister();  
+}
+
+
+
 void activateSpeedLevel1()
 {
-  digitalWrite(LED_SPEED1, HIGH); 
-  digitalWrite(LED_SPEED2, LOW); 
-  digitalWrite(LED_SPEED3, LOW); 
-  digitalWrite(LED_SPEED4, LOW); 
+    bitSet(leds,0);
+  bitClear(leds,1);
+  bitClear(leds,2);
+  bitClear(leds,3);
+  updateShiftRegister();   
+//  digitalWrite(LED_SPEED1, HIGH); 
+//  digitalWrite(LED_SPEED2, LOW); 
+//  digitalWrite(LED_SPEED3, LOW); 
+//  digitalWrite(LED_SPEED4, LOW); 
   digitalWrite(RELAYA, HIGH);
   digitalWrite(RELAYB, HIGH);
 //  pubSubClient.publish("poolcontrol","Button A pressed");
@@ -180,10 +234,15 @@ void activateSpeedLevel1()
 
 void activateSpeedLevel2()
 {
-  digitalWrite(LED_SPEED1, LOW); 
-  digitalWrite(LED_SPEED2, HIGH); 
-  digitalWrite(LED_SPEED3, LOW); 
-  digitalWrite(LED_SPEED4, LOW); 
+  bitClear(leds,0);
+  bitSet(leds,1);
+  bitClear(leds,2);
+  bitClear(leds,3);
+  updateShiftRegister();   
+//  digitalWrite(LED_SPEED1, LOW); 
+//  digitalWrite(LED_SPEED2, HIGH); 
+//  digitalWrite(LED_SPEED3, LOW); 
+//  digitalWrite(LED_SPEED4, LOW); 
   digitalWrite(RELAYA, LOW);
   digitalWrite(RELAYB, HIGH);
 //  pubSubClient.publish("poolcontrol","Button B pressed");  
@@ -192,10 +251,15 @@ void activateSpeedLevel2()
 
 void activateSpeedLevel3()
 {
-  digitalWrite(LED_SPEED1, LOW); 
-  digitalWrite(LED_SPEED2, LOW); 
-  digitalWrite(LED_SPEED3, HIGH); 
-  digitalWrite(LED_SPEED4, LOW);
+  bitClear(leds,0);
+  bitClear(leds,1);
+  bitSet(leds,2);
+  bitClear(leds,3);
+  updateShiftRegister();   
+//  digitalWrite(LED_SPEED1, LOW); 
+//  digitalWrite(LED_SPEED2, LOW); 
+//  digitalWrite(LED_SPEED3, HIGH); 
+//  digitalWrite(LED_SPEED4, LOW);
   digitalWrite(RELAYA, HIGH);
   digitalWrite(RELAYB, LOW);
 //  pubSubClient.publish("poolcontrol","Button C pressed");  
@@ -204,10 +268,15 @@ void activateSpeedLevel3()
 
 void activateSpeedLevel4()
 {
-  digitalWrite(LED_SPEED1, LOW); 
-  digitalWrite(LED_SPEED2, LOW); 
-  digitalWrite(LED_SPEED3, LOW); 
-  digitalWrite(LED_SPEED4, HIGH); 
+  bitClear(leds,0);
+  bitClear(leds,1);
+  bitClear(leds,2);
+  bitSet(leds,3);
+  updateShiftRegister();   
+//  digitalWrite(LED_SPEED1, LOW); 
+//  digitalWrite(LED_SPEED2, LOW); 
+//  digitalWrite(LED_SPEED3, LOW); 
+//  digitalWrite(LED_SPEED4, HIGH); 
   digitalWrite(RELAYA, LOW);
   digitalWrite(RELAYB, LOW);    
 //  pubSubClient.publish("poolcontrol","Button D pressed");
@@ -268,19 +337,28 @@ void reconnect() {
       Serial.print(pubSubClient.state());
       Serial.println(" try again in 5 seconds");
       // Wait 5 seconds before retrying (blink while waiting)
-      blinkLED(LED_LIGHT,10);
+      //TODO
+//      blinkLED(LED_LIGHT,10);
     }
   }
 }
 
 void blinkLED(int led, int times){
-  int initialState = digitalRead(led);
-  int stateToWrite = !initialState;
-  for(int i=0; i < times*2; i++){
-    digitalWrite(led, stateToWrite);
-    stateToWrite = !stateToWrite;
-    delay(250);
-  }
-  digitalWrite(led, initialState);
+  //TODO
+//  int initialState = digitalRead(led);
+//  int stateToWrite = !initialState;
+//  for(int i=0; i < times*2; i++){
+//    digitalWrite(led, stateToWrite);
+//    stateToWrite = !stateToWrite;
+//    delay(250);
+//  }
+//  digitalWrite(led, initialState);
+}
+
+void updateShiftRegister()
+{
+   digitalWrite(latchPin, LOW);
+   shiftOut(dataPin, clockPin, MSBFIRST, leds);
+   digitalWrite(latchPin, HIGH);
 }
 
