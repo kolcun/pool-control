@@ -15,7 +15,7 @@ MatrixOrbitali2c lcd(0x2E);
 #define BUTTON_SPEED1 A0
 #define BUTTON_SPEED2 A1
 #define BUTTON_SPEED3 A2
-#define BUTTON_SPEED4 A3
+#define BUTTON_SPEED4 9
 #define BUTTON_HEATER 7
 #define BUTTON_POOL_LIGHT 8
 
