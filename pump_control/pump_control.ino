@@ -146,7 +146,7 @@ void loop() {
   if(digitalRead(BUTTON_HEATER) == LOW && !heaterActive){
     Serial.println("turn heater on");
     activateHeater();
-  }else if(digitalRead(BUTTON_HEATER) == LOW && !heaterActive){
+  }else if(digitalRead(BUTTON_HEATER) == LOW && heaterActive){
     Serial.println("turn heater off");
     deactivateHeater();
 //note - need to remove local control via insteon sense button at heater
