@@ -13,13 +13,6 @@ byte leds = 0;
 int RELAYA = 5;
 int RELAYB = 6;
 
-//int LED_SPEED1 = 4;
-//int LED_SPEED2 = 5;
-//int LED_SPEED3 = 6;
-//int LED_SPEED4 = 7;
-//int LED_HEATER = 8;
-//int LED_LIGHT = 9;
-
 int BUTTON_SPEED1 = A0;
 int BUTTON_SPEED2 = A1;
 int BUTTON_SPEED3 = A2;
@@ -59,13 +52,6 @@ void setup() {
   //start with all LEDs off
   leds = 0;
   updateShiftRegister();
-    
-//  pinMode(LED_SPEED1, OUTPUT);
-//  pinMode(LED_SPEED2, OUTPUT);
-//  pinMode(LED_SPEED3, OUTPUT);
-//  pinMode(LED_SPEED4, OUTPUT);
-//  pinMode(LED_HEATER, OUTPUT);
-//  pinMode(LED_LIGHT, OUTPUT);
 
   pinMode(BUTTON_SPEED1, INPUT_PULLUP);
   pinMode(BUTTON_SPEED2, INPUT_PULLUP);
@@ -78,16 +64,6 @@ void setup() {
 
   digitalWrite(RELAYA, HIGH);
   digitalWrite(RELAYB, HIGH);
-
-//  digitalWrite(LED_SPEED1, HIGH); 
-//  digitalWrite(LED_SPEED2, LOW); 
-//  digitalWrite(LED_SPEED3, LOW); 
-//  digitalWrite(LED_SPEED4, LOW);
-//  digitalWrite(LED_HEATER, LOW);
-//  digitalWrite(LED_LIGHT, LOW);
-
-   // Open serial communications and wait for port to open:
-
 
   pubSubClient.setServer(mqttServer, 1883);
   pubSubClient.setCallback(mqttCallback);
@@ -139,10 +115,6 @@ void loop() {
   if(digitalRead(BUTTON_SPEED2) == LOW && currentSpeed != 2){
     activateSpeedLevel2();
     Serial.println("Speed 2");
-//    digitalWrite(LED_HEATER, HIGH);
-//    delay(500);
-//    digitalWrite(LED_HEATER, LOW);
-//    digitalWrite(LED_LIGHT, LOW);
   }
 
   if(digitalRead(BUTTON_SPEED3) == LOW && currentSpeed != 3){
@@ -183,12 +155,7 @@ void loop() {
     // - wait for pump to get to speed (5-10s);
     // - tell insteon to turn heater on 
     // - tell arduino via bus - solid light
-    
-    //activateSpeedLevel4();
-//    digitalWrite(LED_HEATER, HIGH);
-//    delay(500);
-//    digitalWrite(LED_HEATER, LOW);
-    //activateSpeedLevel1();
+  
   }
 
   pubSubClient.loop();
@@ -222,10 +189,6 @@ void activateSpeedLevel1()
   bitClear(leds,2);
   bitClear(leds,3);
   updateShiftRegister();   
-//  digitalWrite(LED_SPEED1, HIGH); 
-//  digitalWrite(LED_SPEED2, LOW); 
-//  digitalWrite(LED_SPEED3, LOW); 
-//  digitalWrite(LED_SPEED4, LOW); 
   digitalWrite(RELAYA, HIGH);
   digitalWrite(RELAYB, HIGH);
 //  pubSubClient.publish("poolcontrol","Button A pressed");
@@ -239,10 +202,6 @@ void activateSpeedLevel2()
   bitClear(leds,2);
   bitClear(leds,3);
   updateShiftRegister();   
-//  digitalWrite(LED_SPEED1, LOW); 
-//  digitalWrite(LED_SPEED2, HIGH); 
-//  digitalWrite(LED_SPEED3, LOW); 
-//  digitalWrite(LED_SPEED4, LOW); 
   digitalWrite(RELAYA, LOW);
   digitalWrite(RELAYB, HIGH);
 //  pubSubClient.publish("poolcontrol","Button B pressed");  
@@ -256,10 +215,6 @@ void activateSpeedLevel3()
   bitSet(leds,2);
   bitClear(leds,3);
   updateShiftRegister();   
-//  digitalWrite(LED_SPEED1, LOW); 
-//  digitalWrite(LED_SPEED2, LOW); 
-//  digitalWrite(LED_SPEED3, HIGH); 
-//  digitalWrite(LED_SPEED4, LOW);
   digitalWrite(RELAYA, HIGH);
   digitalWrite(RELAYB, LOW);
 //  pubSubClient.publish("poolcontrol","Button C pressed");  
@@ -273,10 +228,6 @@ void activateSpeedLevel4()
   bitClear(leds,2);
   bitSet(leds,3);
   updateShiftRegister();   
-//  digitalWrite(LED_SPEED1, LOW); 
-//  digitalWrite(LED_SPEED2, LOW); 
-//  digitalWrite(LED_SPEED3, LOW); 
-//  digitalWrite(LED_SPEED4, HIGH); 
   digitalWrite(RELAYA, LOW);
   digitalWrite(RELAYB, LOW);    
 //  pubSubClient.publish("poolcontrol","Button D pressed");
