@@ -5,21 +5,21 @@
 
 MatrixOrbitali2c lcd(0x2E);
 
-int latchPin = 2;
-int clockPin = 4;
-int dataPin = 3;
+#define latchPin 2
+#define clockPin 4
+#define dataPin 3
+
+#define RELAYA 5
+#define RELAYB 6
+
+#define BUTTON_SPEED1 A0
+#define BUTTON_SPEED2 A1
+#define BUTTON_SPEED3 A2
+#define BUTTON_SPEED4 A3
+#define BUTTON_HEATER 7
+#define BUTTON_LIGHT 8
+
 byte leds = 0;
-
-int RELAYA = 5;
-int RELAYB = 6;
-
-int BUTTON_SPEED1 = A0;
-int BUTTON_SPEED2 = A1;
-int BUTTON_SPEED3 = A2;
-int BUTTON_SPEED4 = A3;
-int BUTTON_HEATER = 7;//A4;
-int BUTTON_LIGHT = 8;//A5;
-
 int currentSpeed = 1;
 
 // Enter a MAC address for your controller below.
