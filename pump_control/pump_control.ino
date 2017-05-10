@@ -17,10 +17,14 @@ MatrixOrbitali2c lcd(0x2E);
 #define BUTTON_SPEED3 A2
 #define BUTTON_SPEED4 A3
 #define BUTTON_HEATER 7
-#define BUTTON_LIGHT 8
+#define BUTTON_POOL_LIGHT 8
 
 byte leds = 0;
 int currentSpeed = 1;
+//TODO - as part of boot, need to get the correct values for these from openHab
+boolean heaterActive = false;
+boolean poolLightActive = false;
+
 
 // Enter a MAC address for your controller below.
 // Newer Ethernet shields have a MAC address printed on a sticker on the shield
@@ -39,12 +43,16 @@ PubSubClient pubSubClient(ethClient);
 void setup() {
 
   Serial.begin(9600);
+  //delay seems to help the LCD normalize before we send it commands
+  delay(5000);
   
   lcd.begin(4,20);
-  lcd.setContrast(180);
-  lcd.backlightOn();
+  lcd.setContrast(200);
+  lcd.backlightOff();
+  lcd.lineWrap();
   lcd.clear();
-  lcd.print("Booting... ");
+  lcd.autoScroll();
+  lcd.print("Booting\n");
   
   pinMode(latchPin, OUTPUT);
   pinMode(dataPin, OUTPUT);  
@@ -58,7 +66,7 @@ void setup() {
   pinMode(BUTTON_SPEED3, INPUT_PULLUP);
   pinMode(BUTTON_SPEED4, INPUT_PULLUP);
   pinMode(BUTTON_HEATER, INPUT_PULLUP);
-  pinMode(BUTTON_LIGHT, INPUT_PULLUP);
+  pinMode(BUTTON_POOL_LIGHT, INPUT_PULLUP);
   pinMode(RELAYA, OUTPUT);
   pinMode(RELAYB, OUTPUT);
 
@@ -71,18 +79,21 @@ void setup() {
   // start the Ethernet connection:
   if (Ethernet.begin(mac) == 0) {
     Serial.println("Failed to configure Ethernet using DHCP");
-    // no point in carrying on, so do nothing forevermore:
-    for (;;){
-      //TODO
-//      blinkLED(LED_HEATER,1);
-    }
+    lcdFatalMessage("Eth DHCP failure");
   }
   // print your local IP address:
   printIPAddress();
 
-  delay(1500);
+  if (!pubSubClient.connected()) {
+    reconnectMqtt();
+  }
+
   Serial.println("Ready");
-  lcd.print("Complete");
+  lcd.print("Boot Complete");
+  delay(5000);
+  lcd.noAutoScroll();
+  lcd.clear();
+  refreshLcd();
 }
 
 void loop() {
@@ -100,10 +111,8 @@ void loop() {
   // no ethernet - heater LED blinks forever
   // no MQTT - pool light LED blinks forever
 
-  
-
   if (!pubSubClient.connected()) {
-    reconnect();
+    reconnectMqtt();
   }
 
   
@@ -127,9 +136,9 @@ void loop() {
     Serial.println("Speed 4");
   }
 
-  //pool ight button pushed
-  if(digitalRead(BUTTON_LIGHT) == LOW){
-    Serial.println("heater button pushed");
+  //pool light button pushed
+  if(digitalRead(BUTTON_POOL_LIGHT) == LOW){
+    Serial.println("Pool light button pushed");
     activatePoolLight();
   }
 
@@ -163,28 +172,33 @@ void loop() {
 }
 
 void activateHeater(){
-  Serial.println("heater button");
+  heaterActive = true;
   bitSet(leds,4);
   updateShiftRegister();  
+  refreshLcd();
   delay(1500);
+  heaterActive = false;
   bitClear(leds,4);
   updateShiftRegister();  
+  refreshLcd();
 }
 
 void activatePoolLight(){
-  Serial.println("pool light button");
+  poolLightActive = true;
   bitSet(leds,5);
   updateShiftRegister();  
+  refreshLcd();
   delay(1500);
+  poolLightActive = false;
   bitClear(leds,5);
   updateShiftRegister();  
+  refreshLcd();
 }
 
 
 
-void activateSpeedLevel1()
-{
-    bitSet(leds,0);
+void activateSpeedLevel1(){
+  bitSet(leds,0);
   bitClear(leds,1);
   bitClear(leds,2);
   bitClear(leds,3);
@@ -206,6 +220,7 @@ void activateSpeedLevel2()
   digitalWrite(RELAYB, HIGH);
 //  pubSubClient.publish("poolcontrol","Button B pressed");  
   currentSpeed = 2;
+  refreshLcd();
 }
 
 void activateSpeedLevel3()
@@ -219,6 +234,7 @@ void activateSpeedLevel3()
   digitalWrite(RELAYB, LOW);
 //  pubSubClient.publish("poolcontrol","Button C pressed");  
   currentSpeed = 3;
+  refreshLcd();
   }
 
 void activateSpeedLevel4()
@@ -232,16 +248,21 @@ void activateSpeedLevel4()
   digitalWrite(RELAYB, LOW);    
 //  pubSubClient.publish("poolcontrol","Button D pressed");
   currentSpeed = 4;
+  refreshLcd();
 }
 
 void printIPAddress()
 {
+  lcd.print("IP: ");
   Serial.print("My IP address: ");
   for (byte thisByte = 0; thisByte < 4; thisByte++) {
     // print the value of each byte of the IP address:
     Serial.print(Ethernet.localIP()[thisByte], DEC);
+    lcd.print(Ethernet.localIP()[thisByte], DEC);
     Serial.print(".");
+    lcd.print(".");
   }
+  lcd.print("\n");
 
   Serial.println();
 }
@@ -274,23 +295,50 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   }
 }
 
-void reconnect() {
+void reconnectMqtt() {
   // Loop until we're reconnected
   while (!pubSubClient.connected()) {
     Serial.print("Attempting MQTT connection...");
+    lcd.print("MQTT: ");
     // Attempt to connect
     if (pubSubClient.connect("arduino-pool-control-client")) {
       Serial.println("connected");
+      lcd.print("connected\n");
       pubSubClient.publish("poolcontrol","Arduino online");
       pubSubClient.subscribe("poolcontrol");
     } else {
       Serial.print("failed, rc=");
       Serial.print(pubSubClient.state());
       Serial.println(" try again in 5 seconds");
+      lcd.print("failed, rc=");
+      lcd.print(pubSubClient.state());
+      lcd.println(" try again in 5s\n");
+
+      delay(5000);
       // Wait 5 seconds before retrying (blink while waiting)
       //TODO
 //      blinkLED(LED_LIGHT,10);
     }
+  }
+}
+
+void refreshLcd(){
+
+  lcd.clear();
+  lcd.print("Pool Controller");
+  lcd.print("\nSpeed: speed ");
+  lcd.print(currentSpeed);
+  //TODO - translate this to RPM with a map;
+//  lcd.print(" RPM");
+  if(heaterActive){
+    lcd.print("\nHeater: On");
+  }else{
+    lcd.print("\nHeater: Off");
+  }
+  if(poolLightActive){
+    lcd.print("\nLight: On");
+  }else{
+    lcd.print("\nLight: Off\n");
   }
 }
 
@@ -312,4 +360,14 @@ void updateShiftRegister()
    shiftOut(dataPin, clockPin, MSBFIRST, leds);
    digitalWrite(latchPin, HIGH);
 }
+
+void lcdFatalMessage(const String &s){
+  Serial.println(s);
+  lcd.clear();
+  lcd.print("--- Fatal Error --- ");
+  lcd.print(s);
+  //fatal error, loop forever
+  for (;;){}
+}
+
 
