@@ -19,12 +19,16 @@ MatrixOrbitali2c lcd(0x2E);
 #define BUTTON_HEATER 7
 #define BUTTON_POOL_LIGHT 8
 
+const char lightTopic[27] = "/kolcun/outdoor/pool/light";
+const char heaterTopic[28] = "/kolcun/outdoor/pool/heater";
+const char pumpTopic[26] = "/kolcun/outdoor/pool/pump";
+char* mqttMessage;
+
 byte leds = 0;
 int currentSpeed = 1;
 //TODO - as part of boot, need to get the correct values for these from openHab
 boolean heaterActive = false;
 boolean poolLightActive = false;
-
 
 // Enter a MAC address for your controller below.
 // Newer Ethernet shields have a MAC address printed on a sticker on the shield
@@ -90,7 +94,6 @@ void setup() {
 
   Serial.println("Ready");
   lcd.print("Boot Complete");
-  delay(5000);
   lcd.noAutoScroll();
   lcd.clear();
   refreshLcd();
@@ -274,30 +277,53 @@ void printIPAddress()
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Message arrived [");
+  Serial.print("MQTT Message Arrived [");
   Serial.print(topic);
   Serial.print("] ");
   for (int i=0;i<length;i++) {
     Serial.print((char)payload[i]);
   }
   Serial.println();
+
+  mqttMessage = (char*) payload;
+
+  if(strcmp(topic, lightTopic) == 0){
+    Serial.println("light topic");
+     if(strncmp(mqttMessage, "on", length) == 0){
+      Serial.println("light on");
+      activatePoolLight();
+    }else if(strncmp(mqttMessage, "off", length) == 0){
+      Serial.println("light off");
+      activatePoolLight();
+    }
+  }
   
-  if ((char)payload[0] == '1') {
-    activateSpeedLevel1();
-  } else if ((char)payload[0] == '2') {
-    activateSpeedLevel2();
-  } else if ((char)payload[0] == '3') {
-    activateSpeedLevel3();
-  } else if ((char)payload[0] == '4') {
-    activateSpeedLevel4();
-  } else if ((char)payload[0] == 'L' && (char)payload[1] == 'O' && (char)payload[2] == 'N') {
-    Serial.println("Light on");
-  } else if ((char)payload[0] == 'L' && (char)payload[1] == 'O' && (char)payload[2] == 'F' && (char)payload[3] == 'F') {
-    Serial.print("Light off");
-  } else if ((char)payload[0] == 'H' && (char)payload[1] == 'O' && (char)payload[2] == 'N') {
-    Serial.println("Heater on");
-  } else if ((char)payload[0] == 'H' && (char)payload[1] == 'O' && (char)payload[2] == 'F' && (char)payload[3] == 'F') {
-    Serial.print("Heater off");
+  if(strcmp(topic, heaterTopic) == 0){
+    Serial.println("heater topic");
+    if(strncmp(mqttMessage, "on", length) == 0){
+      Serial.println("heater on");
+      activateHeater();
+    }else if(strncmp(mqttMessage, "off", length) == 0){
+      Serial.println("heater off");
+      activateHeater();
+    }
+  }
+  
+  if(strcmp(topic, pumpTopic) == 0){
+    Serial.println("pump topic");
+     if(strncmp(mqttMessage, "Speed1", length) == 0){
+      Serial.println("Speed 1");
+      activateSpeedLevel1();
+    }else if(strncmp(mqttMessage, "Speed2", length) == 0){
+      Serial.println("Speed2");
+      activateSpeedLevel2();
+    }else if(strncmp(mqttMessage, "Speed3", length) == 0){
+      Serial.println("Speed3");
+      activateSpeedLevel3();
+    }else if(strncmp(mqttMessage, "Speed4", length) == 0){
+      Serial.println("Speed4");
+      activateSpeedLevel4();
+    }
   }
 }
 
@@ -311,7 +337,7 @@ void reconnectMqtt() {
       Serial.println("connected");
       lcd.print("connected\n");
       pubSubClient.publish("poolcontrol","Arduino online");
-      pubSubClient.subscribe("poolcontrol");
+      pubSubClient.subscribe("/kolcun/outdoor/pool/+");
     } else {
       Serial.print("failed, rc=");
       Serial.print(pubSubClient.state());
@@ -346,18 +372,6 @@ void refreshLcd(){
   }else{
     lcd.print("\nLight: Off\n");
   }
-}
-
-void blinkLED(int led, int times){
-  //TODO
-//  int initialState = digitalRead(led);
-//  int stateToWrite = !initialState;
-//  for(int i=0; i < times*2; i++){
-//    digitalWrite(led, stateToWrite);
-//    stateToWrite = !stateToWrite;
-//    delay(250);
-//  }
-//  digitalWrite(led, initialState);
 }
 
 void updateShiftRegister()
