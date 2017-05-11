@@ -1,4 +1,3 @@
-#include <SPI.h>
 #include <Ethernet.h>
 #include <PubSubClient.h>
 #include <MatrixOrbitali2c.h>
