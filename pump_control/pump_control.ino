@@ -18,9 +18,9 @@ MatrixOrbitali2c lcd(0x2E);
 #define BUTTON_HEATER 7
 #define BUTTON_POOL_LIGHT 8
 
-const char lightTopic[27] = "/kolcun/outdoor/pool/light";
-const char heaterTopic[28] = "/kolcun/outdoor/pool/heater";
-const char pumpTopic[26] = "/kolcun/outdoor/pool/pump";
+const char lightTopic[27] = "kolcun/outdoor/pool/light";
+const char heaterTopic[28] = "kolcun/outdoor/pool/heater";
+const char pumpTopic[26] = "kolcun/outdoor/pool/pump";
 char* mqttMessage;
 
 byte leds = 0;
@@ -34,8 +34,10 @@ boolean poolLightActive = false;
 byte mac[] = {
   0x00, 0xAA, 0xBB, 0xCC, 0xDD, 0x04
 };
-IPAddress mqttServer(192, 168, 0, 117);
-//IPAddress mqttServer(192,168,0,136);
+//local on pi
+//IPAddress mqttServer(192, 168, 0, 117);
+//amazon
+IPAddress mqttServer(52, 90, 29, 252);
 
 // Initialize the Ethernet client library
 // with the IP address and port of the server
@@ -51,7 +53,7 @@ void setup() {
 
   lcd.begin(4, 20);
   lcd.setContrast(200);
-  lcd.backlightOff();
+  lcd.backlightOn();
   lcd.lineWrap();
   lcd.clear();
   lcd.autoScroll();
@@ -92,6 +94,8 @@ void setup() {
     reconnectMqtt();
   }
 
+  activateSpeedLevel1();
+  
   Serial.println("Ready");
   lcd.print("Boot Complete");
   lcd.noAutoScroll();
@@ -327,11 +331,13 @@ void reconnectMqtt() {
     Serial.print("Attempting MQTT connection...");
     lcd.print("MQTT: ");
     // Attempt to connect
-    if (pubSubClient.connect("arduino-pool-control-client")) {
+    if (pubSubClient.connect("arduino-pool-control-client", "kolcun", "MosquittoMQTTPassword$isVeryLong123")) {
       Serial.println("connected");
       lcd.print("connected\n");
-      pubSubClient.publish("poolcontrol", "Arduino online");
-      pubSubClient.subscribe("/kolcun/outdoor/pool/+");
+      pubSubClient.publish("kolcun/outdoor/pool/controller", "Arduino online");
+      if(!pubSubClient.subscribe("kolcun/outdoor/pool/+", 1)){
+        lcdFatalMessage("MQTT: unable to subscribe");
+      }
     } else {
       Serial.print("failed, rc=");
       Serial.print(pubSubClient.state());
