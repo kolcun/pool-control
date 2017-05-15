@@ -1,3 +1,12 @@
+
+//TODO
+//- use 3rd relay to controll power to the LCD?
+//-- then, if LCD off, on any button push, turn it on.
+//- track state of heater/light - if they are on, when pushed send off messge, or vice versa
+//-- need to prevent multiple messsages/debounce
+//- source of truth should be openhab - poll it on boot to set valid state on buttons (send MQTT to request state? expect response?);
+//see FIXME tags
+
 #include <Ethernet.h>
 #include <PubSubClient.h>
 #include <MatrixOrbitali2c.h>
@@ -7,6 +16,8 @@ MatrixOrbitali2c lcd(0x2E);
 #define latchPin 2
 #define clockPin 4
 #define dataPin 3
+
+#define tempPin A3
 
 #define RELAYA 5
 #define RELAYB 6
@@ -21,11 +32,13 @@ MatrixOrbitali2c lcd(0x2E);
 const char lightTopic[27] = "kolcun/outdoor/pool/light";
 const char heaterTopic[28] = "kolcun/outdoor/pool/heater";
 const char pumpTopic[26] = "kolcun/outdoor/pool/pump";
+const char controllerTopic[32] = "kolcun/outdoor/pool/controller";
 char* mqttMessage;
 
+char tempResult[5];
 byte leds = 0;
 int currentSpeed = 1;
-//TODO - as part of boot, need to get the correct values for these from openHab
+//FIXME - TODO - as part of boot, need to get the correct values for these from openHab, so current state is valid
 boolean heaterActive = false;
 boolean poolLightActive = false;
 
@@ -46,10 +59,7 @@ EthernetClient ethClient;
 PubSubClient pubSubClient(ethClient);
 
 void setup() {
-
   Serial.begin(9600);
-  //delay seems to help the LCD normalize before we send it commands
-  delay(5000);
 
   lcd.begin(4, 20);
   lcd.setContrast(200);
@@ -111,17 +121,9 @@ void loop() {
   // Speed 3 = Timer 3 = 1750 RPM (minimum for Heater)
   // Speed 4 = Timer 4 = 3240 RPM (full speed for vacuum, slide)
 
-  //TODO
-  //use the LEDS as boot status, for example, LED1 turns on when it has an IP, LED 2 turns on when MQTT is connected
-  //both RED LEDS turn on and blink if there is an error.
-  //error contions
-  // no ethernet - heater LED blinks forever
-  // no MQTT - pool light LED blinks forever
-
   if (!pubSubClient.connected()) {
     reconnectMqtt();
   }
-
 
   if (digitalRead(BUTTON_SPEED1) == LOW && currentSpeed != 1) {
     activateSpeedLevel1();
@@ -143,16 +145,18 @@ void loop() {
     Serial.println("Speed 4");
   }
 
+  //FIXME
   //pool light button pushed
   if (digitalRead(BUTTON_POOL_LIGHT) == LOW) {
     Serial.println("Pool light button pushed");
-    activatePoolLight();
+    setPoolLightOn();
   }
 
+  //FIXME
   //heater button pushed
   if (digitalRead(BUTTON_HEATER) == LOW) {
     Serial.println("turn heater on");
-    activateHeater();
+    setHeaterOn();
     //  }else if(digitalRead(BUTTON_HEATER) == LOW && heaterActive){
     //    Serial.println("turn heater off");
     //    deactivateHeater();
@@ -180,7 +184,7 @@ void loop() {
 
 }
 
-void activateHeater() {
+void setHeaterOn() {
   heaterActive = true;
   activateSpeedLevel3();
   bitSet(leds, 4);
@@ -188,14 +192,14 @@ void activateHeater() {
   refreshLcd();
 }
 
-void deactivateHeater() {
+void setHeaterOff() {
   heaterActive = false;
   bitClear(leds, 4);
   updateShiftRegister();
   refreshLcd();
 }
 
-void activatePoolLight() {
+void setPoolLightOn() {
   poolLightActive = true;
   bitSet(leds, 5);
   updateShiftRegister();
@@ -205,6 +209,10 @@ void activatePoolLight() {
   bitClear(leds, 5);
   updateShiftRegister();
   refreshLcd();
+}
+
+void setPoolLightOff(){
+  
 }
 
 void activateSpeedLevel1() {
@@ -285,14 +293,21 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
   mqttMessage = (char*) payload;
 
+  if (strcmp(topic, controllerTopic) == 0) {
+    if (strncmp(mqttMessage, "temp", length) == 0) {
+      Serial.println("Temp Display");
+      displayTemperature();
+    }    
+  }
+
   if (strcmp(topic, lightTopic) == 0) {
     Serial.println("light topic");
     if (strncmp(mqttMessage, "on", length) == 0) {
       Serial.println("light on");
-      activatePoolLight();
+      setPoolLightOn();
     } else if (strncmp(mqttMessage, "off", length) == 0) {
       Serial.println("light off");
-      activatePoolLight();
+      setPoolLightOff();
     }
   }
 
@@ -300,10 +315,10 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     Serial.println("heater topic");
     if (strncmp(mqttMessage, "on", length) == 0) {
       Serial.println("heater on");
-      activateHeater();
+      setHeaterOn();
     } else if (strncmp(mqttMessage, "off", length) == 0) {
       Serial.println("heater off");
-      activateHeater();
+      setHeaterOff();
     }
   }
 
@@ -334,8 +349,14 @@ void reconnectMqtt() {
     if (pubSubClient.connect("arduino-pool-control-client", "kolcun", "MosquittoMQTTPassword$isVeryLong123")) {
       Serial.println("connected");
       lcd.print("connected\n");
-      pubSubClient.publish("kolcun/outdoor/pool/controller", "Arduino online");
-      if(!pubSubClient.subscribe("kolcun/outdoor/pool/+", 1)){
+      pubSubClient.publish(controllerTopic, "Arduino online");
+      if(!pubSubClient.subscribe(lightTopic, 1)){
+        lcdFatalMessage("MQTT: unable to subscribe");
+      }
+      if(!pubSubClient.subscribe(heaterTopic, 1)){
+        lcdFatalMessage("MQTT: unable to subscribe");
+      }
+      if(!pubSubClient.subscribe(pumpTopic, 1)){
         lcdFatalMessage("MQTT: unable to subscribe");
       }
     } else {
@@ -346,21 +367,17 @@ void reconnectMqtt() {
       lcd.print(pubSubClient.state());
       lcd.println(" try again in 5s\n");
 
+      // Wait 5 seconds before retrying
       delay(5000);
-      // Wait 5 seconds before retrying (blink while waiting)
-      //TODO
-      //      blinkLED(LED_LIGHT,10);
     }
   }
 }
 
 void refreshLcd() {
   lcd.clear();
-  lcd.print("Pool Controller");
+  lcd.print("Pool Controller ");
   lcd.print("\nSpeed: speed ");
   lcd.print(currentSpeed);
-  //TODO - translate this to RPM with a map;
-  //  lcd.print(" RPM");
   if (heaterActive) {
     lcd.print("\nHeater: On");
   } else {
@@ -388,4 +405,19 @@ void lcdFatalMessage(const String &s) {
   for (;;) {}
 }
 
+float getDegreesC() {
+  return ((analogRead(tempPin) * 0.004882814) - 0.5) * 100.0;
+}
+
+void displayTemperature(){
+  lcd.clear();
+  lcd.println("Enclosure");
+  lcd.print("Temperature  ");
+  dtostrf(getDegreesC(), 4, 1, tempResult);
+  lcd.print(tempResult);
+  lcd.print("'C");
+  lcd.println();
+  delay(3000);
+  refreshLcd();
+}
 
