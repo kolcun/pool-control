@@ -10,7 +10,10 @@
 #include <Ethernet.h>
 #include <PubSubClient.h>
 #include <MatrixOrbitali2c.h>
+#include <Event.h>
+#include <Timer.h>
 
+Timer t;
 MatrixOrbitali2c lcd(0x2E);
 
 #define latchPin 2
@@ -41,6 +44,7 @@ int currentSpeed = 1;
 //FIXME - TODO - as part of boot, need to get the correct values for these from openHab, so current state is valid
 boolean heaterActive = false;
 boolean poolLightActive = false;
+boolean lcdOn = true;
 
 // Enter a MAC address for your controller below.
 // Newer Ethernet shields have a MAC address printed on a sticker on the shield
@@ -61,20 +65,16 @@ PubSubClient pubSubClient(ethClient);
 void setup() {
   Serial.begin(9600);
 
-  lcd.begin(4, 20);
-  lcd.setContrast(200);
-  lcd.backlightOn();
-  lcd.lineWrap();
-  lcd.clear();
-  lcd.autoScroll();
-  lcd.print("Booting\n");
-
   pinMode(latchPin, OUTPUT);
   pinMode(dataPin, OUTPUT);
   pinMode(clockPin, OUTPUT);
   //start with all LEDs off
   leds = 0;
   updateShiftRegister();
+  turnLcdOn();
+
+  initLcd();
+  lcd.print("Booting\n");
 
   pinMode(BUTTON_SPEED1, INPUT_PULLUP);
   pinMode(BUTTON_SPEED2, INPUT_PULLUP);
@@ -94,7 +94,7 @@ void setup() {
 
   // start the Ethernet connection:
   if (Ethernet.begin(mac) == 0) {
-    Serial.println("Failed to configure Ethernet using DHCP");
+    Serial.println(F("Failed to configure Ethernet using DHCP"));
     lcdFatalMessage("Eth DHCP failure");
   }
   // print your local IP address:
@@ -106,8 +106,8 @@ void setup() {
 
   activateSpeedLevel1();
   
-  Serial.println("Ready");
-  lcd.print("Boot Complete");
+  Serial.println(F("Ready"));
+  lcd.print(F("Boot Complete"));
   lcd.noAutoScroll();
   lcd.clear();
   refreshLcd();
@@ -125,68 +125,76 @@ void loop() {
     reconnectMqtt();
   }
 
-  if (digitalRead(BUTTON_SPEED1) == LOW && currentSpeed != 1) {
-    activateSpeedLevel1();
-    Serial.println("Speed 1");
-  }
+  if(!lcdOn){
+    if (digitalRead(BUTTON_SPEED1) == LOW || digitalRead(BUTTON_SPEED2) == LOW || digitalRead(BUTTON_SPEED3) == LOW || digitalRead(BUTTON_SPEED4) == LOW || digitalRead(BUTTON_HEATER) == LOW || digitalRead(BUTTON_POOL_LIGHT) == LOW) {
+      Serial.println(F("button push with LCD Off, turning on"));
+      turnLcdOn();
+    }
+  }else{  
 
-  if (digitalRead(BUTTON_SPEED2) == LOW && currentSpeed != 2) {
-    activateSpeedLevel2();
-    Serial.println("Speed 2");
-  }
-
-  if (digitalRead(BUTTON_SPEED3) == LOW && currentSpeed != 3) {
-    activateSpeedLevel3();
-    Serial.println("Speed 3");
-  }
-
-  if (digitalRead(BUTTON_SPEED4) == LOW && currentSpeed != 4) {
-    activateSpeedLevel4();
-    Serial.println("Speed 4");
-  }
-
-  //FIXME
-  //pool light button pushed
-  if (digitalRead(BUTTON_POOL_LIGHT) == LOW) {
-    Serial.println("Pool light button pushed");
-    setPoolLightOn();
-  }
-
-  //FIXME
-  //heater button pushed
-  if (digitalRead(BUTTON_HEATER) == LOW) {
-    Serial.println("turn heater on");
-    setHeaterOn();
-    //  }else if(digitalRead(BUTTON_HEATER) == LOW && heaterActive){
-    //    Serial.println("turn heater off");
-    //    deactivateHeater();
-    //note - need to remove local control via insteon sense button at heater
-    //if we use this, there is no way to maintain a consistnet state of the light on the arduino
-
-    //openhab will
-    //  if heater on ( check with insteon state )
-    // - tell arduino via bus - start blinking light
-    // - turn heater off (insteon)
-    // - wait for heater to flush (5 minutes)
-    // - tell arduino via bus to set speed to chlorine only
-    // - tell arduino via bus - light off
-
-    //  if heater off (check with insteon state )
-    // - tell arduino via bus - start blinking light
-    // - tell arduino via bus - set pump speed to heater speed
-    // - wait for pump to get to speed (5-10s);
-    // - tell insteon to turn heater on
-    // - tell arduino via bus - solid light
-
+    if (digitalRead(BUTTON_SPEED1) == LOW && currentSpeed != 1) {
+      activateSpeedLevel1();
+      Serial.println(F("Speed 1"));
+    }
+  
+    if (digitalRead(BUTTON_SPEED2) == LOW && currentSpeed != 2) {
+      activateSpeedLevel2();
+      Serial.println(F("Speed 2"));
+    }
+  
+    if (digitalRead(BUTTON_SPEED3) == LOW && currentSpeed != 3) {
+      activateSpeedLevel3();
+      Serial.println(F("Speed 3"));
+    }
+  
+    if (digitalRead(BUTTON_SPEED4) == LOW && currentSpeed != 4) {
+      activateSpeedLevel4();
+      Serial.println(F("Speed 4"));
+    }
+  
+    //FIXME
+    //pool light button pushed
+    if (digitalRead(BUTTON_POOL_LIGHT) == LOW) {
+      Serial.println(F("Pool light button pushed"));
+      setPoolLightOn();
+    }
+  
+    //FIXME
+    //heater button pushed
+    if (digitalRead(BUTTON_HEATER) == LOW) {
+      Serial.println(F("turn heater on"));
+      setHeaterOn();
+      //  }else if(digitalRead(BUTTON_HEATER) == LOW && heaterActive){
+      //    Serial.println("turn heater off");
+      //    deactivateHeater();
+      //note - need to remove local control via insteon sense button at heater
+      //if we use this, there is no way to maintain a consistnet state of the light on the arduino
+  
+      //openhab will
+      //  if heater on ( check with insteon state )
+      // - tell arduino via bus - start blinking light
+      // - turn heater off (insteon)
+      // - wait for heater to flush (5 minutes)
+      // - tell arduino via bus to set speed to chlorine only
+      // - tell arduino via bus - light off
+  
+      //  if heater off (check with insteon state )
+      // - tell arduino via bus - start blinking light
+      // - tell arduino via bus - set pump speed to heater speed
+      // - wait for pump to get to speed (5-10s);
+      // - tell insteon to turn heater on
+      // - tell arduino via bus - solid light
+  
+    }
   }
 
   pubSubClient.loop();
-
+  t.update();
 }
 
 void setHeaterOn() {
   heaterActive = true;
-  activateSpeedLevel3();
+//  activateSpeedLevel3();
   bitSet(leds, 4);
   updateShiftRegister();
   refreshLcd();
@@ -268,24 +276,24 @@ void activateSpeedLevel4() {
 }
 
 void printIPAddress() {
-  lcd.print("IP: ");
-  Serial.print("My IP address: ");
+  lcd.print(F("IP: "));
+  Serial.print(F("IP address: "));
   for (byte thisByte = 0; thisByte < 4; thisByte++) {
     // print the value of each byte of the IP address:
     Serial.print(Ethernet.localIP()[thisByte], DEC);
     lcd.print(Ethernet.localIP()[thisByte], DEC);
-    Serial.print(".");
-    lcd.print(".");
+    Serial.print(F("."));
+    lcd.print(F("."));
   }
-  lcd.print("\n");
+  lcd.print(F("\n"));
 
   Serial.println();
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("MQTT Message Arrived [");
+  Serial.print(F("MQTT Message Arrived ["));
   Serial.print(topic);
-  Serial.print("] ");
+  Serial.print(F("] "));
   for (int i = 0; i < length; i++) {
     Serial.print((char)payload[i]);
   }
@@ -295,46 +303,49 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
   if (strcmp(topic, controllerTopic) == 0) {
     if (strncmp(mqttMessage, "temp", length) == 0) {
-      Serial.println("Temp Display");
+      Serial.println(F("Temp Display"));
       displayTemperature();
+    }else if (strncmp(mqttMessage, "lcdoff", length) == 0) {
+      turnLcdOff();
     }    
+
   }
 
   if (strcmp(topic, lightTopic) == 0) {
-    Serial.println("light topic");
+    Serial.println(F("light topic"));
     if (strncmp(mqttMessage, "on", length) == 0) {
-      Serial.println("light on");
+      Serial.println(F("light on"));
       setPoolLightOn();
     } else if (strncmp(mqttMessage, "off", length) == 0) {
-      Serial.println("light off");
+      Serial.println(F("light off"));
       setPoolLightOff();
     }
   }
 
   if (strcmp(topic, heaterTopic) == 0) {
-    Serial.println("heater topic");
+    Serial.println(F("heater topic"));
     if (strncmp(mqttMessage, "on", length) == 0) {
-      Serial.println("heater on");
+      Serial.println(F("heater on"));
       setHeaterOn();
     } else if (strncmp(mqttMessage, "off", length) == 0) {
-      Serial.println("heater off");
+      Serial.println(F("heater off"));
       setHeaterOff();
     }
   }
 
   if (strcmp(topic, pumpTopic) == 0) {
-    Serial.println("pump topic");
+    Serial.println(F("pump topic"));
     if (strncmp(mqttMessage, "Speed1", length) == 0) {
-      Serial.println("Speed 1");
+      Serial.println(F("Speed 1"));
       activateSpeedLevel1();
     } else if (strncmp(mqttMessage, "Speed2", length) == 0) {
-      Serial.println("Speed2");
+      Serial.println(F("Speed2"));
       activateSpeedLevel2();
     } else if (strncmp(mqttMessage, "Speed3", length) == 0) {
-      Serial.println("Speed3");
+      Serial.println(F("Speed3"));
       activateSpeedLevel3();
     } else if (strncmp(mqttMessage, "Speed4", length) == 0) {
-      Serial.println("Speed4");
+      Serial.println(F("Speed4"));
       activateSpeedLevel4();
     }
   }
@@ -343,29 +354,35 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 void reconnectMqtt() {
   // Loop until we're reconnected
   while (!pubSubClient.connected()) {
-    Serial.print("Attempting MQTT connection...");
-    lcd.print("MQTT: ");
+    if(!lcdOn){
+      turnLcdOn();
+    }
+    Serial.print(F("Attempting MQTT connection..."));
+    lcd.print(F("MQTT: "));
     // Attempt to connect
     if (pubSubClient.connect("arduino-pool-control-client", "kolcun", "MosquittoMQTTPassword$isVeryLong123")) {
-      Serial.println("connected");
-      lcd.print("connected\n");
+      Serial.println(F("connected"));
+      lcd.print(F("connected\n"));
       pubSubClient.publish(controllerTopic, "Arduino online");
       if(!pubSubClient.subscribe(lightTopic, 1)){
-        lcdFatalMessage("MQTT: unable to subscribe");
+        lcdFatalMessage(F("MQTT: unable to subscribe"));
       }
       if(!pubSubClient.subscribe(heaterTopic, 1)){
-        lcdFatalMessage("MQTT: unable to subscribe");
+        lcdFatalMessage(F("MQTT: unable to subscribe"));
       }
       if(!pubSubClient.subscribe(pumpTopic, 1)){
-        lcdFatalMessage("MQTT: unable to subscribe");
+        lcdFatalMessage(F("MQTT: unable to subscribe"));
+      }
+      if(!pubSubClient.subscribe(controllerTopic, 1)){
+        lcdFatalMessage(F("MQTT: unable to subscribe"));
       }
     } else {
-      Serial.print("failed, rc=");
+      Serial.print(F("failed, rc="));
       Serial.print(pubSubClient.state());
-      Serial.println(" try again in 5 seconds");
-      lcd.print("failed, rc=");
+      Serial.println(F(" try again in 5 seconds"));
+      lcd.print(F("failed, rc="));
       lcd.print(pubSubClient.state());
-      lcd.println(" try again in 5s\n");
+      lcd.println(F(" try again in 5s\n"));
 
       // Wait 5 seconds before retrying
       delay(5000);
@@ -374,19 +391,22 @@ void reconnectMqtt() {
 }
 
 void refreshLcd() {
+  if(!lcdOn){
+    return;
+  }
   lcd.clear();
-  lcd.print("Pool Controller ");
-  lcd.print("\nSpeed: speed ");
+  lcd.print(F("Pool Controller "));
+  lcd.print(F("\nSpeed: speed "));
   lcd.print(currentSpeed);
   if (heaterActive) {
-    lcd.print("\nHeater: On");
+    lcd.print(F("\nHeater: On"));
   } else {
-    lcd.print("\nHeater: Off");
+    lcd.print(F("\nHeater: Off"));
   }
   if (poolLightActive) {
-    lcd.print("\nLight: On");
+    lcd.print(F("\nLight: On"));
   } else {
-    lcd.print("\nLight: Off\n");
+    lcd.print(F("\nLight: Off\n"));
   }
 }
 
@@ -397,9 +417,12 @@ void updateShiftRegister() {
 }
 
 void lcdFatalMessage(const String &s) {
+  if(!lcdOn){
+    turnLcdOn();
+  }
   Serial.println(s);
   lcd.clear();
-  lcd.print("--- Fatal Error --- ");
+  lcd.print(F("--- Fatal Error --- "));
   lcd.print(s);
   //fatal error, loop forever
   for (;;) {}
@@ -410,14 +433,43 @@ float getDegreesC() {
 }
 
 void displayTemperature(){
+  if(!lcdOn){
+    turnLcdOn();
+  }
   lcd.clear();
-  lcd.println("Enclosure");
-  lcd.print("Temperature  ");
+  lcd.println(F("Enclosure"));
+  lcd.print(F("Temperature  "));
   dtostrf(getDegreesC(), 4, 1, tempResult);
   lcd.print(tempResult);
-  lcd.print("'C");
+  lcd.print(F("'C"));
   lcd.println();
-  delay(3000);
+  delay(5000);
   refreshLcd();
+}
+
+void turnLcdOn(){
+  lcdOn = true;
+  bitSet(leds, 6);
+  updateShiftRegister();
+  delay(1000);
+  initLcd();
+  refreshLcd();
+  //3 minutes
+  t.after(180000, turnLcdOff);
+  //15 seconds
+  //t.after(15000, turnLcdOff);
+}
+void turnLcdOff(){
+  lcdOn = false;
+  bitClear(leds, 6);
+  updateShiftRegister();
+}
+void initLcd(){
+  lcd.begin(4, 20);
+  lcd.setContrast(200);
+  lcd.backlightOn();
+  lcd.lineWrap();
+  lcd.clear();
+  lcd.autoScroll();
 }
 
