@@ -35,7 +35,7 @@ MatrixOrbitali2c lcd(0x2E);
 const char lightTopic[27] = "kolcun/outdoor/pool/light";
 const char heaterTopic[28] = "kolcun/outdoor/pool/heater";
 const char pumpTopic[26] = "kolcun/outdoor/pool/pump";
-const char controllerTopic[32] = "kolcun/outdoor/pool/controller";
+//const char controllerTopic[32] = "kolcun/outdoor/pool/controller";
 char* mqttMessage;
 
 char tempResult[5];
@@ -64,7 +64,6 @@ PubSubClient pubSubClient(ethClient);
 
 void setup() {
   Serial.begin(9600);
-
   pinMode(latchPin, OUTPUT);
   pinMode(dataPin, OUTPUT);
   pinMode(clockPin, OUTPUT);
@@ -105,7 +104,7 @@ void setup() {
   }
 
   activateSpeedLevel1();
-  
+
   Serial.println(F("Ready"));
   lcd.print(F("Boot Complete"));
   lcd.noAutoScroll();
@@ -125,40 +124,40 @@ void loop() {
     reconnectMqtt();
   }
 
-  if(!lcdOn){
+  if (!lcdOn) {
     if (digitalRead(BUTTON_SPEED1) == LOW || digitalRead(BUTTON_SPEED2) == LOW || digitalRead(BUTTON_SPEED3) == LOW || digitalRead(BUTTON_SPEED4) == LOW || digitalRead(BUTTON_HEATER) == LOW || digitalRead(BUTTON_POOL_LIGHT) == LOW) {
       Serial.println(F("button push with LCD Off, turning on"));
       turnLcdOn();
     }
-  }else{  
+  } else {
 
     if (digitalRead(BUTTON_SPEED1) == LOW && currentSpeed != 1) {
       activateSpeedLevel1();
       Serial.println(F("Speed 1"));
     }
-  
+
     if (digitalRead(BUTTON_SPEED2) == LOW && currentSpeed != 2) {
       activateSpeedLevel2();
       Serial.println(F("Speed 2"));
     }
-  
+
     if (digitalRead(BUTTON_SPEED3) == LOW && currentSpeed != 3) {
       activateSpeedLevel3();
       Serial.println(F("Speed 3"));
     }
-  
+
     if (digitalRead(BUTTON_SPEED4) == LOW && currentSpeed != 4) {
       activateSpeedLevel4();
       Serial.println(F("Speed 4"));
     }
-  
+
     //FIXME
     //pool light button pushed
     if (digitalRead(BUTTON_POOL_LIGHT) == LOW) {
       Serial.println(F("Pool light button pushed"));
       setPoolLightOn();
     }
-  
+
     //FIXME
     //heater button pushed
     if (digitalRead(BUTTON_HEATER) == LOW) {
@@ -169,7 +168,7 @@ void loop() {
       //    deactivateHeater();
       //note - need to remove local control via insteon sense button at heater
       //if we use this, there is no way to maintain a consistnet state of the light on the arduino
-  
+
       //openhab will
       //  if heater on ( check with insteon state )
       // - tell arduino via bus - start blinking light
@@ -177,14 +176,14 @@ void loop() {
       // - wait for heater to flush (5 minutes)
       // - tell arduino via bus to set speed to chlorine only
       // - tell arduino via bus - light off
-  
+
       //  if heater off (check with insteon state )
       // - tell arduino via bus - start blinking light
       // - tell arduino via bus - set pump speed to heater speed
       // - wait for pump to get to speed (5-10s);
       // - tell insteon to turn heater on
       // - tell arduino via bus - solid light
-  
+
     }
   }
 
@@ -194,7 +193,7 @@ void loop() {
 
 void setHeaterOn() {
   heaterActive = true;
-//  activateSpeedLevel3();
+  //  activateSpeedLevel3();
   bitSet(leds, 4);
   updateShiftRegister();
   refreshLcd();
@@ -219,8 +218,8 @@ void setPoolLightOn() {
   refreshLcd();
 }
 
-void setPoolLightOff(){
-  
+void setPoolLightOff() {
+
 }
 
 void activateSpeedLevel1() {
@@ -301,15 +300,21 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
   mqttMessage = (char*) payload;
 
-  if (strcmp(topic, controllerTopic) == 0) {
+  if (strcmp(topic, "kolcun/outdoor/pool/controller") == 0) {
     if (strncmp(mqttMessage, "temp", length) == 0) {
       Serial.println(F("Temp Display"));
       displayTemperature();
-    }else if (strncmp(mqttMessage, "lcdoff", length) == 0) {
-      turnLcdOff();
-    }    
-
+    }
   }
+
+  if (strcmp(topic, "kolcun/outdoor/pool/controller/lcd") == 0) {
+    if (strncmp(mqttMessage, "on", length) == 0) {
+      turnLcdOn();
+    } else if (strncmp(mqttMessage, "off", length) == 0) {
+      turnLcdOff();
+    }
+  }
+
 
   if (strcmp(topic, lightTopic) == 0) {
     Serial.println(F("light topic"));
@@ -354,7 +359,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 void reconnectMqtt() {
   // Loop until we're reconnected
   while (!pubSubClient.connected()) {
-    if(!lcdOn){
+    if (!lcdOn) {
       turnLcdOn();
     }
     Serial.print(F("Attempting MQTT connection..."));
@@ -363,17 +368,17 @@ void reconnectMqtt() {
     if (pubSubClient.connect("arduino-pool-control-client", "kolcun", "MosquittoMQTTPassword$isVeryLong123")) {
       Serial.println(F("connected"));
       lcd.print(F("connected\n"));
-      pubSubClient.publish(controllerTopic, "Arduino online");
-      if(!pubSubClient.subscribe(lightTopic, 1)){
+      pubSubClient.publish("kolcun/outdoor/pool/controller/status", "Arduino online");
+      if (!pubSubClient.subscribe(lightTopic, 1)) {
         lcdFatalMessage(F("MQTT: unable to subscribe"));
       }
-      if(!pubSubClient.subscribe(heaterTopic, 1)){
+      if (!pubSubClient.subscribe(heaterTopic, 1)) {
         lcdFatalMessage(F("MQTT: unable to subscribe"));
       }
-      if(!pubSubClient.subscribe(pumpTopic, 1)){
+      if (!pubSubClient.subscribe(pumpTopic, 1)) {
         lcdFatalMessage(F("MQTT: unable to subscribe"));
       }
-      if(!pubSubClient.subscribe(controllerTopic, 1)){
+      if (!pubSubClient.subscribe("kolcun/outdoor/pool/controller/#", 1)) {
         lcdFatalMessage(F("MQTT: unable to subscribe"));
       }
     } else {
@@ -391,7 +396,7 @@ void reconnectMqtt() {
 }
 
 void refreshLcd() {
-  if(!lcdOn){
+  if (!lcdOn) {
     return;
   }
   lcd.clear();
@@ -417,7 +422,7 @@ void updateShiftRegister() {
 }
 
 void lcdFatalMessage(const String &s) {
-  if(!lcdOn){
+  if (!lcdOn) {
     turnLcdOn();
   }
   Serial.println(s);
@@ -432,8 +437,8 @@ float getDegreesC() {
   return ((analogRead(tempPin) * 0.004882814) - 0.5) * 100.0;
 }
 
-void displayTemperature(){
-  if(!lcdOn){
+void displayTemperature() {
+  if (!lcdOn) {
     turnLcdOn();
   }
   lcd.clear();
@@ -447,9 +452,9 @@ void displayTemperature(){
   refreshLcd();
 }
 
-void turnLcdOn(){
+void turnLcdOn() {
   lcdOn = true;
-  bitSet(leds, 6);
+  bitClear(leds, 6);
   updateShiftRegister();
   delay(1000);
   initLcd();
@@ -459,12 +464,12 @@ void turnLcdOn(){
   //15 seconds
   //t.after(15000, turnLcdOff);
 }
-void turnLcdOff(){
+void turnLcdOff() {
   lcdOn = false;
-  bitClear(leds, 6);
+  bitSet(leds, 6);
   updateShiftRegister();
 }
-void initLcd(){
+void initLcd() {
   lcd.begin(4, 20);
   lcd.setContrast(200);
   lcd.backlightOn();
