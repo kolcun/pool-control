@@ -1,9 +1,6 @@
 
 //TODO
-//- use 3rd relay to controll power to the LCD?
-//-- then, if LCD off, on any button push, turn it on.
 //- track state of heater/light - if they are on, when pushed send off messge, or vice versa
-//-- need to prevent multiple messsages/debounce
 //- source of truth should be openhab - poll it on boot to set valid state on buttons (send MQTT to request state? expect response?);
 //see FIXME tags
 
