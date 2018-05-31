@@ -1,6 +1,6 @@
 
 //TODO
-//  as part of boot, need to get the correct values for these from openHab, so current state is valid
+// as part of boot, need to get the correct values for these from openHab, so current state is valid
 // since a mqtt status message is sent indicating the controller is online
 // we can leave it up to openhab to send two responses, indicating the current state of the light and heater
 // openhab will send the standard commmand message, not status. 
