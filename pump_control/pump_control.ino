@@ -22,13 +22,18 @@
 //      // - wait for pump to get to speed (5-10s);
 //      // - tell insteon to turn heater on
 //      // - tell arduino via bus - solid light
-
+//
+// are the light and heater buttons reflecting the state of the system?
+// no - they do not turn on, if the light/heater are turned on via openhab, or manually.
+// need to sync these buttons with the state of the system - be able to tell the panel to turn on 
+// lights with no action.
 #include <Ethernet.h>
 #include <PubSubClient.h>
 #include <MatrixOrbitali2c.h>
 #include <Event.h>
 #include <Timer.h>
 #include <OneButton.h>
+#include "credentials.h"
 
 Timer t;
 MatrixOrbitali2c lcd(0x2E);
@@ -80,7 +85,8 @@ byte mac[] = {
 //local on pi
 //IPAddress mqttServer(192, 168, 0, 117);
 //amazon
-IPAddress mqttServer(54, 156, 244, 62);
+
+char* mqttServer = MQTT_SERVER;
 
 // Initialize the Ethernet client library
 // with the IP address and port of the server
@@ -434,7 +440,7 @@ void reconnectMqtt() {
     Serial.print(F("Attempting MQTT connection..."));
     lcd.print(F("MQTT: "));
     // Attempt to connect
-    if (pubSubClient.connect("arduino-pool-control-client", "kolcun", "MosquittoMQTTPassword$isVeryLong123")) {
+    if (pubSubClient.connect("arduino-pool-control-client", MQTT_USER, MQTT_PASSWD)) {
       Serial.println(F("connected"));
       lcd.print(F("connected\n"));
       pubSubClient.publish("kolcun/outdoor/pool/controller/status", "controller online");
@@ -546,4 +552,3 @@ void initLcd() {
   lcd.clear();
   lcd.autoScroll();
 }
-
